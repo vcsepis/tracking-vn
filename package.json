@@ -1,0 +1,27 @@
+{
+  "name": "tracking-system",
+  "version": "1.0.0",
+  "description": "Ứng dụng Node.js để theo dõi trạng thái tracking từ API bên thứ ba và lưu vào MySQL.",
+  "main": "src/app.js",
+  "scripts": {
+    "start": "node src/app.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "tracking",
+    "mysql",
+    "nodejs",
+    "express",
+    "cronjob"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.4.0",
+    "dotenv": "^16.0.3",
+    "express": "^4.18.2",
+    "moment": "^2.30.1",
+    "mysql2": "^3.11.5",
+    "node-schedule": "^2.1.1"
+  }
+}
