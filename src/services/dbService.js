@@ -10,6 +10,7 @@ const connectToDatabase = async () => {
       password: dbConfig.password,
       database: dbConfig.database,
       port: dbConfig.port,
+      connectionLimit: 5,
       ssl: dbConfig.ssl,
     });
     console.log('Kết nối MySQL thành công.');

@@ -27,7 +27,7 @@ const sendDiscordNotification = async (trackingId, stateName, eventDateTime) => 
       };
   
       const response = await axios.post(
-        'https://webhook-test.com/cc374b8fa9274a4ecf5626ec36f0b4de',
+        'https://webhook-test.com/64df19766b5ec15a3209253f8e7d6843',
         payload
       );
       console.log(`Đã gửi payload đến webhook-test cho trackingId: ${trackingId}, Response: ${response.status}`);
