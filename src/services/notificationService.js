@@ -27,7 +27,7 @@ const sendDiscordNotification = async (trackingId, stateName, eventDateTime) => 
       };
   
       const response = await axios.post(
-        'https://webhook-test.com/64df19766b5ec15a3209253f8e7d6843',
+        'https://webhook-prod.myepis.cloud/api/v1/webhooks/shipping/trackings/ep/result',
         payload
       );
       console.log(`Đã gửi payload đến webhook-test cho trackingId: ${trackingId}, Response: ${response.status}`);
