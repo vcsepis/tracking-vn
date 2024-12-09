@@ -1,0 +1,30 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches:
+      - main  # Thay 'main' bằng nhánh bạn muốn deploy
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Setup SSH
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+        ssh-keyscan -H 167.71.194.87 >> ~/.ssh/known_hosts
+
+    - name: Deploy code to VPS
+      run: |
+        ssh root@167.71.194.87 "
+          cd /path/to/your/project || exit;
+          git pull origin main;
+          npm install;
+          pm2 restart your-app-name || pm2 start your-app.js --name your-app-name;
+        "
