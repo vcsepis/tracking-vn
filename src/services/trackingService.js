@@ -61,8 +61,20 @@ const getLatestTrackingData = async (trackingId) => {
 
 
 // Hàm lưu hoặc cập nhật trạng thái vào cơ sở dữ liệu
+const { sendDiscordNotification, sendPayloadToWebhook } = require('./notificationService');
+
 const upsertTrackingData = async (trackingId, latestData) => {
-  let { date, state_name } = latestData;
+  let { date, timeAndEvent, locationTo, locationFrom } = latestData;
+
+  // Xây dựng state_name từ timeAndEvent, locationTo và locationFrom
+  const components = [
+    timeAndEvent.trim(),
+    locationTo && locationTo.trim() !== '' ? locationTo.trim() : locationFrom.trim(),
+  ];
+
+  // Loại bỏ giá trị trùng lặp
+  const uniqueComponents = [...new Set(components.filter((c) => c && c !== 'Unknown'))];
+  const state_name = uniqueComponents.join(' - ');
 
   // Kiểm tra giá trị hợp lệ
   if (!state_name || state_name.trim() === '') {
@@ -116,6 +128,7 @@ const upsertTrackingData = async (trackingId, latestData) => {
     return { success: false, error: error.message };
   }
 };
+
 
 
 
