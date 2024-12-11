@@ -61,7 +61,6 @@ const getLatestTrackingData = async (trackingId) => {
 
 
 // Hàm lưu hoặc cập nhật trạng thái vào cơ sở dữ liệu
-const { sendDiscordNotification, sendPayloadToWebhook } = require('./notificationService');
 
 const upsertTrackingData = async (trackingId, latestData) => {
   let { date, timeAndEvent, locationTo, locationFrom } = latestData;
