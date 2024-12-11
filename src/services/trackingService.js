@@ -1,5 +1,6 @@
 const axios = require('axios');
 const moment = require('moment');
+const { sendDiscordNotification, sendPayloadToWebhook } = require('./notificationService');
 
 // Hàm lấy dữ liệu mới nhất từ API bên thứ ba
 const getLatestTrackingData = async (trackingId) => {
@@ -53,49 +54,55 @@ const getLatestTrackingData = async (trackingId) => {
 
 // Hàm lưu hoặc cập nhật trạng thái vào cơ sở dữ liệu
 const upsertTrackingData = async (trackingId, latestData) => {
-    let { date, state_name } = latestData;
-  
-    // Nếu `state_name` hoặc `date` không hợp lệ
-    if (!state_name || state_name.trim() === '') {
-      console.warn(`state_name bị null hoặc trống cho trackingId: ${trackingId}. Đặt giá trị mặc định.`);
-      state_name = 'Unknown';
+  let { date, state_name } = latestData;
+
+  if (!state_name || state_name.trim() === '') {
+    console.warn(`state_name bị null hoặc trống cho trackingId: ${trackingId}. Đặt giá trị mặc định.`);
+    state_name = 'Unknown';
+  }
+  if (!moment(date, 'MMM DD, YYYY HH:mm', true).isValid()) {
+    console.warn(`Ngày không hợp lệ: ${date}. Đặt giá trị mặc định.`);
+    date = 'Nov 01, 1970 00:00';
+  }
+
+  const formattedDate = moment(date, 'MMM DD, YYYY HH:mm').format('YYYY-MM-DD HH:mm:ss');
+
+  try {
+    const checkQuery = `SELECT tracking_id FROM state WHERE tracking_id = ?`;
+    const [rows] = await global.db.query(checkQuery, [trackingId]);
+
+    let action;
+    if (rows.length === 0) {
+      const insertQuery = `
+        INSERT INTO state (tracking_id, state_name, created_at)
+        VALUES (?, ?, ?)
+      `;
+      const [insertResult] = await global.db.query(insertQuery, [trackingId, state_name, formattedDate]);
+      console.log(`Tracking ID ${trackingId} đã được thêm mới.`);
+      action = 'inserted';
+
+      // Call notifications after successful insert
+      await sendDiscordNotification(trackingId, state_name, formattedDate);
+      await sendPayloadToWebhook(trackingId, state_name, formattedDate);
+    } else {
+      const updateQuery = `
+        UPDATE state
+        SET state_name = ?, created_at = ?
+        WHERE tracking_id = ?
+      `;
+      const [updateResult] = await global.db.query(updateQuery, [state_name, formattedDate, trackingId]);
+      console.log(`Tracking ID ${trackingId} đã được cập nhật.`);
+      action = 'updated';
+
+      // Call notifications after successful update
+      await sendDiscordNotification(trackingId, state_name, formattedDate);
+      await sendPayloadToWebhook(trackingId, state_name, formattedDate);
     }
-    if (!moment(date, 'MMM DD, YYYY HH:mm', true).isValid()) {
-      console.warn(`Ngày không hợp lệ: ${date}. Đặt giá trị mặc định.`);
-      date = 'Nov 01, 1970 00:00'; // Giá trị mặc định
-    }
-  
-    // Chuyển đổi định dạng ngày sang `YYYY-MM-DD HH:mm:ss`
-    const formattedDate = moment(date, 'MMM DD, YYYY HH:mm').format('YYYY-MM-DD HH:mm:ss');
-  
-    try {
-      // Kiểm tra xem `tracking_id` có tồn tại không
-      const checkQuery = `SELECT tracking_id FROM state WHERE tracking_id = ?`;
-      const [rows] = await global.db.query(checkQuery, [trackingId]);
-  
-      if (rows.length === 0) {
-        // Nếu không tồn tại, thực hiện INSERT
-        const insertQuery = `
-          INSERT INTO state (tracking_id, state_name, created_at)
-          VALUES (?, ?, ?)
-        `;
-        const [insertResult] = await global.db.query(insertQuery, [trackingId, state_name, formattedDate]);
-        console.log(`Tracking ID ${trackingId} đã được thêm mới.`);
-        return insertResult.affectedRows > 0;
-      } else {
-        // Nếu tồn tại, thực hiện UPDATE
-        const updateQuery = `
-          UPDATE state
-          SET state_name = ?, created_at = ?
-          WHERE tracking_id = ?
-        `;
-        const [updateResult] = await global.db.query(updateQuery, [state_name, formattedDate, trackingId]);
-        console.log(`Tracking ID ${trackingId} đã được cập nhật.`);
-        return updateResult.affectedRows > 0;
-      }
-    } catch (error) {
-      console.error(`Lỗi khi chèn hoặc cập nhật trạng thái cho ${trackingId}:`, error.message);
-      return false;
-    }
-  };
+
+    return { success: true, action };
+  } catch (error) {
+    console.error(`Lỗi khi chèn hoặc cập nhật trạng thái cho ${trackingId}:`, error.message);
+    return { success: false, error: error.message };
+  }
+};
 module.exports = { getLatestTrackingData, upsertTrackingData };
