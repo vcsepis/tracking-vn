@@ -9,17 +9,11 @@ const getLatestTrackingData = async (trackingId) => {
       `https://avn-tracking.myepis.cloud/tracking?trackingId=${trackingId}`
     );
 
-    // Log chi tiết dữ liệu trả về từ API
     console.log(`Dữ liệu trả về từ API cho trackingId ${trackingId}:`, JSON.stringify(response.data, null, 2));
 
-    if (!response.data) {
-      console.error(`Không nhận được dữ liệu trả về cho trackingId: ${trackingId}`);
-      return { history: [], state_name: 'Unknown' };
-    }
-
-    if (!response.data.history || !Array.isArray(response.data.history)) {
+    if (!response.data || !response.data.history || !Array.isArray(response.data.history)) {
       console.error(`Không tìm thấy hoặc history không hợp lệ cho trackingId: ${trackingId}`);
-      return { history: [], state_name: response.data.state_name || 'Unknown' };
+      return { history: [], state_name: 'Unknown', date: '', timeAndEvent: '', locationTo: '', locationFrom: '' };
     }
 
     const history = response.data.history;
@@ -29,12 +23,22 @@ const getLatestTrackingData = async (trackingId) => {
       return currentDateTime > latestDateTime ? current : latest;
     });
 
-    // If locationTo is empty, fall back to locationFrom
-    const stateName = latestEvent.locationTo && latestEvent.locationTo.trim() !== ''
-      ? latestEvent.locationTo
+    // Tách phần văn bản từ timeAndEvent
+    const eventText = latestEvent.timeAndEvent.split(' ').slice(1).join(' ');
+
+    const locationTo = latestEvent.locationTo && latestEvent.locationTo.trim() !== '' 
+      ? latestEvent.locationTo 
       : latestEvent.locationFrom || 'Unknown';
 
-    // Kết hợp date và timeAndEvent để tạo timestamp
+    const components = [
+      eventText.trim(),
+      locationTo.trim(),
+    ];
+
+    // Loại bỏ giá trị trùng lặp trong state_name
+    const uniqueComponents = [...new Set(components.filter((c) => c && c !== 'Unknown'))];
+    const stateName = uniqueComponents.join(' - ');
+
     const eventDateTime = `${latestEvent.date} ${latestEvent.timeAndEvent.split(' ')[0]}`;
     if (!moment(eventDateTime, 'MMM DD, YYYY HH:mm', true).isValid()) {
       console.warn(`Ngày không hợp lệ: ${eventDateTime} cho trackingId ${trackingId}.`);
@@ -44,6 +48,9 @@ const getLatestTrackingData = async (trackingId) => {
     return {
       state_name: stateName,
       date: eventDateTime,
+      timeAndEvent: eventText,
+      locationTo: locationTo,
+      locationFrom: latestEvent.locationFrom,
     };
   } catch (error) {
     console.error(`Lỗi khi gọi API bên thứ ba cho trackingId ${trackingId}:`, error.message);
@@ -52,10 +59,12 @@ const getLatestTrackingData = async (trackingId) => {
 };
 
 
+
 // Hàm lưu hoặc cập nhật trạng thái vào cơ sở dữ liệu
 const upsertTrackingData = async (trackingId, latestData) => {
   let { date, state_name } = latestData;
 
+  // Kiểm tra giá trị hợp lệ
   if (!state_name || state_name.trim() === '') {
     console.warn(`state_name bị null hoặc trống cho trackingId: ${trackingId}. Đặt giá trị mặc định.`);
     state_name = 'Unknown';
@@ -68,23 +77,12 @@ const upsertTrackingData = async (trackingId, latestData) => {
   const formattedDate = moment(date, 'MMM DD, YYYY HH:mm').format('YYYY-MM-DD HH:mm:ss');
 
   try {
+    // Kiểm tra nếu tracking_id đã tồn tại
     const checkQuery = `SELECT tracking_id FROM state WHERE tracking_id = ?`;
     const [rows] = await global.db.query(checkQuery, [trackingId]);
 
-    let action;
-    if (rows.length === 0) {
-      const insertQuery = `
-        INSERT INTO state (tracking_id, state_name, created_at)
-        VALUES (?, ?, ?)
-      `;
-      const [insertResult] = await global.db.query(insertQuery, [trackingId, state_name, formattedDate]);
-      console.log(`Tracking ID ${trackingId} đã được thêm mới.`);
-      action = 'inserted';
-
-      // Call notifications after successful insert
-      await sendDiscordNotification(trackingId, state_name, formattedDate);
-      await sendPayloadToWebhook(trackingId, state_name, formattedDate);
-    } else {
+    if (rows.length > 0) {
+      // Nếu tồn tại, thực hiện UPDATE
       const updateQuery = `
         UPDATE state
         SET state_name = ?, created_at = ?
@@ -92,17 +90,33 @@ const upsertTrackingData = async (trackingId, latestData) => {
       `;
       const [updateResult] = await global.db.query(updateQuery, [state_name, formattedDate, trackingId]);
       console.log(`Tracking ID ${trackingId} đã được cập nhật.`);
-      action = 'updated';
 
-      // Call notifications after successful update
+      // Gửi thông báo sau khi UPDATE thành công
       await sendDiscordNotification(trackingId, state_name, formattedDate);
       await sendPayloadToWebhook(trackingId, state_name, formattedDate);
-    }
 
-    return { success: true, action };
+      return { success: true, action: 'updated' };
+    } else {
+      // Nếu không tồn tại, thực hiện INSERT
+      const insertQuery = `
+        INSERT INTO state (tracking_id, state_name, created_at)
+        VALUES (?, ?, ?)
+      `;
+      const [insertResult] = await global.db.query(insertQuery, [trackingId, state_name, formattedDate]);
+      console.log(`Tracking ID ${trackingId} đã được thêm mới.`);
+
+      // Gửi thông báo sau khi INSERT thành công
+      await sendDiscordNotification(trackingId, state_name, formattedDate);
+      await sendPayloadToWebhook(trackingId, state_name, formattedDate);
+
+      return { success: true, action: 'inserted' };
+    }
   } catch (error) {
-    console.error(`Lỗi khi chèn hoặc cập nhật trạng thái cho ${trackingId}:`, error.message);
+    console.error(`Lỗi khi xử lý trạng thái cho ${trackingId}:`, error.message);
     return { success: false, error: error.message };
   }
 };
+
+
+
 module.exports = { getLatestTrackingData, upsertTrackingData };
