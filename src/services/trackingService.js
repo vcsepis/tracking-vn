@@ -2,7 +2,7 @@ const axios = require('axios');
 const moment = require('moment');
 
 // Hàm lấy dữ liệu mới nhất từ API bên thứ ba
-const getLatestTrackingData = async trackingId => {
+const getLatestTrackingData = async (trackingId) => {
   try {
     const response = await axios.get(
       `https://avn-tracking.myepis.cloud/tracking?trackingId=${trackingId}`
@@ -28,8 +28,10 @@ const getLatestTrackingData = async trackingId => {
       return currentDateTime > latestDateTime ? current : latest;
     });
 
-    // Sử dụng locationTo làm state_name
-    const stateName = latestEvent.locationTo || 'Unknown';
+    // If locationTo is empty, fall back to locationFrom
+    const stateName = latestEvent.locationTo && latestEvent.locationTo.trim() !== ''
+      ? latestEvent.locationTo
+      : latestEvent.locationFrom || 'Unknown';
 
     // Kết hợp date và timeAndEvent để tạo timestamp
     const eventDateTime = `${latestEvent.date} ${latestEvent.timeAndEvent.split(' ')[0]}`;
@@ -47,6 +49,7 @@ const getLatestTrackingData = async trackingId => {
     throw error;
   }
 };
+
 
 // Hàm lưu hoặc cập nhật trạng thái vào cơ sở dữ liệu
 const upsertTrackingData = async (trackingId, latestData) => {
