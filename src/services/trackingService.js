@@ -89,11 +89,18 @@ const upsertTrackingData = async (trackingId, latestData) => {
 
   try {
     // Kiểm tra nếu tracking_id đã tồn tại
-    const checkQuery = `SELECT tracking_id FROM state WHERE tracking_id = ?`;
+    const checkQuery = `SELECT state_name FROM state WHERE tracking_id = ?`;
     const [rows] = await global.db.query(checkQuery, [trackingId]);
 
     if (rows.length > 0) {
-      // Nếu tồn tại, thực hiện UPDATE
+      // Nếu tồn tại, kiểm tra state_name
+      const currentStateName = rows[0].state_name;
+      if (currentStateName === state_name) {
+        console.log(`state_name không thay đổi cho trackingId: ${trackingId}. Không thực hiện cập nhật hoặc gửi thông báo.`);
+        return { success: true, action: 'no_change' };
+      }
+
+      // Nếu state_name thay đổi, thực hiện UPDATE
       const updateQuery = `
         UPDATE state
         SET state_name = ?, created_at = ?
@@ -127,6 +134,7 @@ const upsertTrackingData = async (trackingId, latestData) => {
     return { success: false, error: error.message };
   }
 };
+
 
 
 
